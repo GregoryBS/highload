@@ -13,7 +13,6 @@
 #include <sys/wait.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <signal.h>
 #include <unistd.h>
 
 #include <string>
@@ -25,12 +24,12 @@ using namespace std;
 #define SRV_IP "localhost"
 #define SOCK_PORT 80
 #define BUFFER_SIZE 10240
-#define CONF "./httpd.conf"
+#define CONF "/etc/httpd.conf"
 
 #define OK 200
-#define FORBIDDEN  403
-#define NOT_FOUND  404
-#define NOT_ALLOWED  405
+#define FORBIDDEN 403
+#define NOT_FOUND 404
+#define NOT_ALLOWED 405
 
 class Request {
 public:
@@ -57,19 +56,6 @@ public:
         }
         this->version = elems[2];
 
-        while ((elems[3] = strtok(NULL, "\r\n"))) {
-            string str = elems[3];
-            int pos = str.find(": ");
-            if (pos == string::npos) {
-                ok = false;
-                return;
-            }
-            string token;
-            token = str.substr(0, pos);
-            str.erase(0, pos + 2);
-            this->headers[token] = str;
-        }
-
         ok = true;
         return;
     }
@@ -86,17 +72,12 @@ public:
         return this->version;
     }
 
-    map<string, string>& get_headers() {
-        return this->headers;
-    }
-
     bool get_ok() {
         return this->ok;
     }
 
 private:
     string method, url, version;
-    map<string, string> headers;
     bool ok;
 };
 
@@ -112,7 +93,7 @@ public:
 
     string get_string(const string& cont_type, int cont_len, const string& data) {
         auto t = chrono::system_clock::to_time_t(chrono::system_clock::now());
-        this-> main += ("Date: " + string(ctime(&t)) + "\r\n");
+        this-> main += ("Date: " + string(ctime(&t)));
         if (this->status != this->codes[OK])
             return main;
 
@@ -138,13 +119,28 @@ void read_file(string& readedData, FILE *input) {
         readedData += byte;
 }
 
+string url_decode(string& src) {
+    string result;
+    int sym;
+    for (int i = 0; i < src.length(); i++) {
+        if (int(src[i]) == 37) {
+            sscanf(src.substr(i + 1, 2).c_str(), "%x", &sym);
+            result += char(sym);
+            i += 2;
+        } else {
+            result += src[i];
+        }
+    }
+    return result;
+}
+
 string parse_url(const string& url, const string& root) {
     string new_url(url);
     int pos = new_url.find("?");
     if (pos != string::npos)
         new_url = new_url.substr(0, pos);
 
-    string path = root + new_url;
+    string path = root + url_decode(new_url);
     return path;
 }
 
@@ -161,17 +157,15 @@ string create_response(Request& req, const string& root) {
         {"txt", "text/plain"},
     };
 
-    string data;
     if (req.get_method() != "GET" && req.get_method() != "HEAD") {
         Response res(req.get_version(), NOT_ALLOWED);
-        return res.get_string("",0, data);
+        return res.get_string("", 0, "");
     }
 
     string path = parse_url(req.get_url(), root);
-
     if (path.find("../") != string::npos) {
         Response res(req.get_version(), FORBIDDEN);
-        return res.get_string("", 0, data);
+        return res.get_string("", 0, "");
     }
 
     bool isDir = false;
@@ -189,12 +183,14 @@ string create_response(Request& req, const string& root) {
     if (!f) {
         if (isDir) {
             Response res(req.get_version(), FORBIDDEN);
-            return res.get_string("", 0, data);
+            return res.get_string("", 0, "");
         } else {
             Response res(req.get_version(), NOT_FOUND);
-            return res.get_string("", 0, data);
+            return res.get_string("", 0, "");
         }
     }
+
+    string data;
     read_file(data, f);
     fclose(f);
 
@@ -290,8 +286,7 @@ public:
         int status = 0;
         for (int i = 0; i < forkCount; i++) {
             wait(&status);
-            if (!WIFEXITED(status))
-                cout << "Fork exited with some error: " << status << endl;
+            cout << "Fork exited with status: " << status << endl;
         }
     }
 
