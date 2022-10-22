@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <mpi.h>
 
 #define TRUE 1
 #define FALSE 0
+#define N 10
 
 #define OK 0
 #define NO_SOLVE -1
@@ -44,7 +46,7 @@ void print_matrix(FILE *f, int **matrix, int n, int m)
     for (int i = 0; i < n; i++)
     {
         for (int j = 0; j < m; j++)
-            fprintf(f, "%6d", matrix[i][j]);
+            fprintf(f, "%8d", matrix[i][j]);
         fprintf(f, "\n");
     }
 }
@@ -128,18 +130,17 @@ int find_path(int **board, int n, int m, int pos_i, int pos_j)
     return find;
 }
 
-int solve(int n, int m)
+int solve(int **board, int n, int m)
 {
-    if (n > m)
-    {
-        m += n;
-        n = m - n;
-        m -= n;
-    }
+    // if (n > m)
+    // {
+    //     m += n;
+    //     n = m - n;
+    //     m -= n;
+    // }
     if (!((n == 1 && m == 1) || (n == 3 && (m == 4 || m > 6)) || (n >= 4 && m >= 5)))
         return NO_SOLVE;
 
-    int **chess_board = alloc_matrix(n, m);
     int n2 = (n + 1) / 2, m2 = (m + 1) / 2, flag = TRUE;
     for (int i = 0; i < n2 && flag; i++)
     {
@@ -148,19 +149,43 @@ int solve(int n, int m)
             if (n * m % 2 && (i + j) % 2)
                 continue;
 
-            if (find_path(chess_board, n, m, i, j))
+            if (find_path(board, n, m, i, j))
                 flag = FALSE;
             else
-                zero_matrix(chess_board, n, m);
+                zero_matrix(board, n, m);
         }
     }
-
-    print_matrix(stdout, chess_board, n, m);
-    free_matrix(chess_board, n);
     return OK;
 }
 
 int main(int argc, char **argv)
 {
-    return solve(7, 7);
+    int sizes[][2] = {{3, 4}, {4, 5}, {5, 5}, {3, 7}, {7, 7}, {8, 8}, {10, 10}, {3, 14}, {15, 15}, {25, 25}, 
+                    {39, 39}, {50, 50}, {64, 64}, {73, 73}, {100, 100}, {200, 200}, {500, 500}, {1000, 1000}};
+    int n = sizeof(sizes) / sizeof(sizes[0]);
+    FILE *file = stdout;
+    if (!file)
+        return NO_SOLVE;
+    
+    MPI_Init(&argc, &argv);
+    for (int i = 0; i < n; i++)
+    {
+        int **matrix = alloc_matrix(sizes[i][0], sizes[i][1]);
+        double time = 0, t = 0;
+        for (int j = 0; j < N; j++)
+        {
+            t = MPI_Wtime();
+            solve(matrix, sizes[i][0], sizes[i][1]);
+            time += MPI_Wtime() - t;
+            if (j < N - 1)
+                zero_matrix(matrix, sizes[i][0], sizes[i][1]);
+        }
+        fprintf(file, "Solution for %dx%d board:\n", sizes[i][0], sizes[i][1]);
+        print_matrix(file, matrix, sizes[i][0], sizes[i][1]);
+        fprintf(file, "Time for solution: %lf\n", time / N);
+        free_matrix(matrix, sizes[i][0]);
+    }
+    MPI_Finalize();
+    fclose(file);
+    return OK;
 }
