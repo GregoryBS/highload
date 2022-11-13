@@ -1,57 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <mpi.h>
-
-#define TRUE 1
-#define FALSE 0
-#define N 10
-
-#define OK 0
-#define NO_SOLVE -1
-
-void free_matrix(int **matrix, int n)
-{
-    for (int i = 0; i < n; i++)
-        free(matrix[i]);
-    free(matrix);
-}
-
-int **alloc_matrix(int n, int m)
-{
-    int **ptr = calloc(n, sizeof(int *));
-    if (!ptr)
-        return NULL;
-
-    for (int i = 0; i < n; i++)
-    {
-        ptr[i] = calloc(m, sizeof(int));
-        if (!ptr[i])
-        {
-            free_matrix(ptr, n);
-            return NULL;
-        }
-    }
-    return ptr;
-}
-
-void zero_matrix(int **matrix, int n, int m)
-{
-    for (int i = 0; i < n; i++)
-        memset(matrix[i], 0, m * sizeof(int));
-}
-
-void print_matrix(FILE *f, int **matrix, int n, int m)
-{
-    for (int i = 0; i < n; i++)
-    {
-        for (int j = 0; j < m; j++)
-            fprintf(f, "%8d", matrix[i][j]);
-        fprintf(f, "\n");
-    }
-}
-
-int steps[][2] = {{-1, -2}, {-2, -1}, {-2, 1}, {1, -2}, {-1, 2}, {2, -1}, {1, 2}, {2, 1}};
+#include "lib.h"
 
 int make_step(int **board, int n, int m, int pos_i, int pos_j, int done)
 {
@@ -97,6 +45,23 @@ int make_step(int **board, int n, int m, int pos_i, int pos_j, int done)
             return index[i + 1];
 }
 
+// int make_step(int **board, int n, int m, int pos_i, int pos_j, int done)
+// {
+//     int last = sizeof(steps) / sizeof(steps[0]);
+//     if (++done == last)
+//         return NO_SOLVE;
+
+//     for (int i = done; i < last; i++)
+//     {
+//         int buf_i = pos_i + steps[i][0];
+//         int buf_j = pos_j + steps[i][1];
+//         if (buf_i < 0 || buf_i >= n || buf_j < 0 || buf_j >= m || board[buf_i][buf_j] > 0)
+//             continue;
+//         return i;
+//     }
+//     return NO_SOLVE;
+// }
+
 int find_path(int **board, int n, int m, int pos_i, int pos_j)
 {
     int find = FALSE, max_step = n * m, step = 1, step_index = 0;
@@ -132,12 +97,12 @@ int find_path(int **board, int n, int m, int pos_i, int pos_j)
 
 int solve(int **board, int n, int m)
 {
-    // if (n > m)
-    // {
-    //     m += n;
-    //     n = m - n;
-    //     m -= n;
-    // }
+    if (n > m)
+    {
+        m += n;
+        n = m - n;
+        m -= n;
+    }
     if (!((n == 1 && m == 1) || (n == 3 && (m == 4 || m > 6)) || (n >= 4 && m >= 5)))
         return NO_SOLVE;
 
