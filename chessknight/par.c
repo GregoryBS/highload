@@ -1,6 +1,16 @@
 #include <mpi.h>
 #include "lib.h"
 
+int steps[][2] = {{-1, -2}, {-2, -1}, {-2, 1}, {1, -2}, {-1, 2}, {2, -1}, {1, 2}, {2, 1}};
+
+/*
+2 types of process - main and workers.
+2 queues - tasks and results.
+in the beginning main generates tasks by worker count and put them in task queue.
+workers get task from queue and do some job. result send in results queue.
+main check result state: if solved - finish, else generate new task(s).
+*/
+
 int solve(int **board, int n, int m)
 {
     return OK;
@@ -16,7 +26,7 @@ int main(int argc, char **argv)
         return NO_SOLVE;
     
     MPI_Init(&argc, &argv);
-    for (int i = 0; i < n; i++)
+    /*for (int i = 0; i < n; i++)
     {
         int **matrix = alloc_matrix(sizes[i][0], sizes[i][1]);
         double time = 0, t = 0;
@@ -32,7 +42,14 @@ int main(int argc, char **argv)
         print_matrix(file, matrix, sizes[i][0], sizes[i][1]);
         fprintf(file, "Time for solution: %lf\n", time / N);
         free_matrix(matrix, sizes[i][0]);
-    }
+    }*/
+    int myrank, nprocs, len;
+	char name[MPI_MAX_PROCESSOR_NAME];
+
+    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+	MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+	MPI_Get_processor_name(name, &len);
+    printf("Hello from processor %s[%d] %d of %d  \n", name, len, myrank, nprocs);
     MPI_Finalize();
     fclose(file);
     return OK;
