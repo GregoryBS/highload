@@ -1,22 +1,15 @@
 #include <mpi.h>
 #include "lib.h"
 
-/*
-2 types of process - main and workers.
-in the beginning main generates tasks by worker count and put them in task queue.
-workers get task from queue and do some job. result send in results queue.
-main check result state: if solved - finish, else generate new task(s).
-*/
-
 int solve(int **board, int n, int m, int rank, int nprocs)
 {
     if (check_sizes(n, m) != OK)
         return NO_SOLVE;
 
-    if (rank == 0)
+    if (rank == 0) 
     {
         int n2 = (n + 1) / 2, m2 = (m + 1) / 2, find = FALSE;
-        int i = 0, j = -1;
+        int i = 0, j = -1, stepsk = sizeof(steps) / sizeof(steps[0]);
         while (!find)
         {
             j++;
@@ -30,14 +23,50 @@ int solve(int **board, int n, int m, int rank, int nprocs)
             if (n * m % 2 && (i + j) % 2)
                 continue;
 
-            /*find = find_solution(board, n, m, i, j, rank, nprocs)) //заменить на параллельную обработку
-            if (!find)
-                zero_matrix(board, n, m);*/ 
+            int first = -1, second = -1;
+            while (1)
+            {
+                if (second < 0)
+                {
+                    first = make_step(board, n, m, i, j, first);
+                    if (first < 0)
+                        break;
+                }
+                second = make_step(board, n, m, i + steps[first][0], j + steps[first][1], second);
+                if (second < 0)
+                    continue;
+                int task[4] = {i, j, first, second};
+                // get message of ready worker
+                // if find - exit else:
+                // send task
+            }
         }
+        // send all workers that there is nothing to do
     }
     else 
     {
-
+        // send ready message 
+        while (1)
+        {
+            // read task from main - if task exit - then break
+            int task[4], max_step = n * m;
+            int *step_done = malloc(max_step-- * sizeof(int));
+            if (!step_done)
+                return NO_SOLVE; // send message to main about error
+            int i = task[0], j = task[1], f = task[2], s = task[3];
+            step_done[0] = f;
+            step_done[1] = s;
+            step_done[2] = -1;
+            board[i][j] = 1;
+            i += steps[f][0];
+            j += steps[f][1];
+            board[i][j] = 2;
+            i += steps[s][0];
+            j += steps[s][1];
+            board[i][j] = 2;
+            int find = find_path(board, step_done, n, m, i, j, 2, max_step);
+            // send find to main
+        }
     }
     return OK;
 }
