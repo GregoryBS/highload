@@ -3,8 +3,8 @@
 
 int find_solution(int **board, int n, int m, int pos_i, int pos_j)
 {
-    int max_step = n * m, step = 0;
-    int *step_done = malloc(max_step-- * sizeof(int));
+    int max_step = n * m - 1, step = 0;
+    int *step_done = malloc(max_step * sizeof(int));
     if (!step_done)
         return FALSE;
     step_done[step] = -1;

@@ -1,5 +1,7 @@
 #include "lib.h"
 
+int steps[STEPS][2] = {{-1, -2}, {-2, -1}, {-2, 1}, {1, -2}, {-1, 2}, {2, -1}, {1, 2}, {2, 1}};
+
 void free_matrix(int **matrix, int n)
 {
     for (int i = 0; i < n; i++)
