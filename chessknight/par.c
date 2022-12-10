@@ -1,6 +1,12 @@
 #include <mpi.h>
 #include "lib.h"
 
+#ifdef _OPENMP
+
+#include <omp.h>
+
+#endif
+
 extern int steps[STEPS][2];
 
 int solve(int **board, int n, int m, int rank, int nprocs)
@@ -29,7 +35,8 @@ int solve(int **board, int n, int m, int rank, int nprocs)
             if (n * m % 2 && (i + j) % 2)
                 continue;
 
-            int first = -1, second = -1;
+            int **tasks = alloc_matrix(STEPS * STEPS, 4);
+            int first = -1, second = -1, count = 0;
             while (1)
             {
                 if (second < 0)
@@ -45,36 +52,50 @@ int solve(int **board, int n, int m, int rank, int nprocs)
                 second = make_step(board, n, m, i + steps[first][0], j + steps[first][1], second);
                 if (second < 0)
                     continue;
-                int task[4] = {i, j, first, second};
-                MPI_Status status;
-                MPI_Recv(step_done, max_step, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-                if (status.MPI_TAG)
-                {
-                    find = status.MPI_TAG;
-                    board[i][j] = 1;
-                    for (int k = 0; k < max_step; k++)
-                    {
-                        i += steps[step_done[k]][0];
-                        j += steps[step_done[k]][1];
-                        board[i][j] = k + 2;
-                    }
-                    for (int k = 1; k < nprocs; k++)
-                        MPI_Send(task, 1, MPI_INT, k, 0, MPI_COMM_WORLD);
-                    break;
-                }
-                MPI_Send(task, 4, MPI_INT, status.MPI_SOURCE, 1, MPI_COMM_WORLD);
+                tasks[count][0] = i; tasks[count][1] = j; tasks[count][2] = first; tasks[count][3] = second;
+                count++;
             }
+            int k = 0, x = 1;
+#pragma omp parallel default(none) shared(board, i, j, find, tasks, count, steps, max_step, nprocs) private(k, x, step_done)
+            {
+#pragma omp for
+                for (k = 0; k < count; k++)
+                {
+                    if (!find)
+                    {
+                        MPI_Send(tasks[k], 4, MPI_INT, k % nprocs + 1, 0, MPI_COMM_WORLD);
+                        MPI_Status status;
+                        MPI_Recv(step_done, max_step, MPI_INT, k % nprocs + 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+#pragma omp critical
+                        {
+                            if (status.MPI_TAG)
+                            {
+                                find = status.MPI_TAG;
+                                board[i][j] = 1;
+                                for (int k0 = 0; k0 < max_step; k0++)
+                                {
+                                    i += steps[step_done[k]][0];
+                                    j += steps[step_done[k]][1];
+                                    board[i][j] = k0 + 2;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            free_matrix(tasks, STEPS * STEPS);
+            for (k = 1; k < nprocs; k++)
+                MPI_Send(&k, 1, MPI_INT, k, 1, MPI_COMM_WORLD);
         }
     }
     else 
     {
-        MPI_Send(step_done, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
         while (1)
         {
             int task[4];
             MPI_Status status;
             MPI_Recv(task, 4, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-            if (!status.MPI_TAG)
+            if (status.MPI_TAG)
                 break;
             int i = task[0], j = task[1], f = task[2], s = task[3];
             step_done[0] = f;
