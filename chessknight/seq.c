@@ -8,7 +8,9 @@ int find_solution(int **board, int n, int m, int pos_i, int pos_j)
     if (!step_done)
         return FALSE;
     step_done[step] = -1;
-    int find = find_path(board, step_done, n, m, pos_i, pos_j, step, max_step);
+    int find = find_path(step_done, n, m, pos_i, pos_j, step, max_step);
+    if (find)
+        fill_board(board, pos_i, pos_j, step_done, max_step);
     free(step_done);
     return find;
 }
