@@ -144,27 +144,53 @@ int solve(int **board, int n, int m, int rank, int nprocs)
             }
             else 
             {
-                int count = 0, where = 0;
+                int count = 0, count_tasks = 0, where = 0;
                 MPI_Status status;
                 MPI_Recv(&count, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
 
-                step_done = alloc_matrix(1, max_step);
+                int task0[FSTEPS + 1];
 
                 for (int k = 0; k < count && !find; k++)
                 {
-                    MPI_Recv(step_done[0], FSTEPS + 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+                    MPI_Recv(task0, FSTEPS + 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
                     if (status.MPI_TAG)
                         find = TRUE;
                     else 
                     {
-                        find = find_path(step_done[0], n, m, i, j, FSTEPS, max_step);
-                        MPI_Send(step_done[0], max_step, MPI_INT, 0, find, MPI_COMM_WORLD);
+                        int pos_i = i, pos_j = j;
+                        for (int t = 0; t < FSTEPS; t++)
+                        {
+                            pos_i += steps[task0[t]][0];
+                            pos_j += steps[task0[t]][1];
+                        }
+                        count_tasks = make_nsteps(&tasks, FSTEPS, n, m, pos_i, pos_j);
+                        step_done = alloc_matrix(count_tasks, max_step);
+
+#pragma omp parallel default(shared)
+{
+#pragma omp for
+                        for (int t = 0; t < count_tasks; t++)
+                        {
+                            memcpy(step_done[t], task0, FSTEPS * sizeof(int));
+                            memcpy(&step_done[t][FSTEPS], tasks[t], (FSTEPS + 1) * sizeof(int));
+                            int findt = find_path(step_done[t], n, m, i, j, FSTEPS * 2, max_step);
+#pragma omp critical 
+{
+                            if (findt)
+                            {
+                                find = TRUE;
+                                where = t;
+                            }
+}
+                        }
+}
+                        MPI_Send(step_done[where], max_step, MPI_INT, 0, find, MPI_COMM_WORLD);
+                        free_matrix(step_done, count_tasks);
+                        free_matrix(tasks, count_tasks);
                     }
                 }
                 if (!find)
                     MPI_Recv(&find, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-
-                free_matrix(step_done, 1);
             }
         }
     }
